@@ -1,7 +1,11 @@
 # Local secrets (never commit)
 /Robot/PatrolRobot/Config/network_config.local.h
 /Robot/PatrolRobot/Config/mqtt_secret.local.h
-/SD/mp_deployment_source/k230_cloud_secret_local.py
+
+# K230 SD-card workspace and local-only deployment documents
+/SD/
+/ASSETS.md
+/部署与验收指南.md
 
 # Keil MDK generated output, logs, and per-user state
 /Robot/PatrolRobot/MDK-ARM/PatrolRobot/
@@ -12,15 +16,6 @@
 
 # STM32CubeMX local state
 /Robot/PatrolRobot/.mxproject
-
-# Runtime-generated K230 captures
-/SD/break/
-/SD/heat_damage/
-/SD/wear/
-
-# Large/provenance-sensitive runtime artifacts
-/SD/micropython
-/SD/mp_deployment_source/*.kmodel
 
 # Personal project instructions and common local tooling state
 /Robot/AGENTS.md
