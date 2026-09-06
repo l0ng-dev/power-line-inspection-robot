@@ -1,89 +1,131 @@
 # 输电线路巡检机器人
 
-本项目由 STM32G474VET6 主控程序和 K230 视觉程序组成。现有代码实现了超声波测距、GY-906 温度采集、MLT-BT05 蓝牙输出、ESP-01S 联网与 MQTT 上报，以及 K230 对断裂、热损伤和磨损三类缺陷的检测、照片保存和 UART 告警。视觉告警用于通知与诊断，不直接控制电机。
+这是一个由 STM32G474 主控与 K230 视觉模块组成的输电线路巡检机器人项目。当前代码覆盖距离与温度采集、蓝牙状态输出、ESP-01S 联网、MQTT 遥测、三类缺陷识别，以及 K230 到 STM32 的 UART 告警链路。
 
-## 目录结构
+> 项目仍处于原型验证阶段。视觉结果用于告警、记录和上报，不直接驱动电机或其他执行器。
+
+## 功能与状态
+
+| 模块 | 当前实现 | 验证状态 |
+| --- | --- | --- |
+| STM32 传感器 | GY-906 温度采集、超声波测距 | 已有功能运行记录；公开整理后未重新进行整机实测 |
+| 本地交互 | MLT-BT05 蓝牙状态与视觉告警输出 | 三类视觉告警样例链路已有历史联调记录 |
+| STM32 网络 | ESP-01S、MQTT 3.1.1、遥测与视觉事件队列 | 源码与构建已验证；长期联网稳定性待验证 |
+| K230 视觉 | `break`、`heat_damage`、`wear` 三类检测，保存带框图片 | 三类样例已联调；完整数据集指标待验证 |
+| K230 云端 | 板载 Wi-Fi 上传缺陷图片 | 部分样例有历史记录；完整覆盖与稳定性待验证 |
+| 运动控制 | 无 | 当前不在项目范围内 |
+
+“构建通过”“样例联调通过”和“整机长期验收”是不同层级的证据，请勿将其中一项等同于全部完成。
+
+## 项目结构
 
 ```text
 .
 ├── Robot/
 │   ├── PatrolRobot/              # STM32CubeMX / Keil MDK-ARM 工程
 │   │   ├── Application/          # 应用调度、遥测、蓝牙命令、视觉事件
-│   │   ├── BSP/                  # 蓝牙、ESP-01S、GY-906、K230、超声波
-│   │   ├── Config/               # 可公开配置入口与本地配置
+│   │   ├── BSP/                  # 外部模块的板级驱动
+│   │   ├── Config/               # 公开配置入口与本地配置示例
 │   │   ├── Core/                 # CubeMX 生成的初始化和中断代码
 │   │   ├── Drivers/              # STM32 HAL 与 CMSIS
 │   │   ├── MDK-ARM/              # Keil 工程文件
 │   │   ├── Middleware/MQTT/      # MQTT 3.1.1 编解码与状态机
 │   │   └── PatrolRobot.ioc       # STM32CubeMX 配置源
 │   ├── 项目架构说明.md
-│   └── 机器人项目CubeMX工程重建交接报告_2026-09-02.md
-├── SD/                           # K230 SD 卡脚本与部署配置
+│   └── STM32开发与验证记录_2026-09-02.md
+├── SD/                           # K230 启动、推理与板级辅助脚本
 │   ├── mp_deployment_source/
 │   ├── ybUtils/
 │   └── 使用说明.md
-└── 输电线路巡检机器人第三方使用说明书.md
+├── ASSETS.md                     # 未纳入 Git 的运行时与模型说明
+├── CONTRIBUTING.md               # 贡献指南
+└── SECURITY.md                   # 安全问题报告说明
 ```
 
 ## 硬件与开发环境
 
-- STM32：STM32G474VET6（LQFP100），工程配置为 Cortex-M4、系统时钟 170 MHz。
-- STM32 工具：Keil MDK-ARM，工程启用 Arm Compiler 6；可使用 STM32CubeMX 打开 `Robot/PatrolRobot/PatrolRobot.ioc`。
-- 视觉端：Yahboom K230；脚本依赖其 CanMV/MicroPython 环境中的 `aicube`、`media`、`nncase_runtime`、`ulab`、`image`、`network` 和 `machine` 模块。
-- 外设：MLT-BT05、ESP-01S、GY-906、超声波模块。模块电源和具体板级电气连接应以实物与数据手册为准。
-- Keil、STM32CubeMX、CanMV 固件/IDE 的精确版本：待确认。KModel 的 `nncase_version` 配置为 2.9.0。
+- 主控：STM32G474VET6（LQFP100），工程系统时钟为 170 MHz。
+- STM32 工具链：Keil MDK-ARM，工程记录 Arm Compiler 6.24；可使用 STM32CubeMX 6.18.1 打开 `Robot/PatrolRobot/PatrolRobot.ioc`，固件包记录为 STM32CubeG4 1.6.3。
+- 视觉端：Yahboom K230；脚本依赖 CanMV/MicroPython 环境中的 `aicube`、`media`、`nncase_runtime`、`ulab`、`image`、`network` 和 `machine` 模块。
+- 外设：MLT-BT05、ESP-01S、GY-906、超声波模块。
+- KModel 配置的 `nncase_version` 为 2.9.0。
+- Keil MDK 主程序、CanMV IDE 和本地 CanMV 固件的完整发布版本：待确认；本地运行记录曾标识 CanMV v1.4.3。
 
-## 已确认的接口与协议
+模块供电、电平与具体板卡接法必须以实物丝印、原理图和数据手册为准。
+
+## 已确认接口
 
 | 功能 | 接口与引脚 | 参数 |
-|---|---|---|
+| --- | --- | --- |
 | MLT-BT05 | STM32 USART3：PB10/TX、PB11/RX | 9600，8N1 |
 | K230 告警 | K230 IO32/UART3_TXD → STM32 PC11/UART4_RX，共地 | 115200，8N1 |
 | ESP-01S | STM32 UART5：PC12/TX、PD2/RX | 115200，8N1 |
-| GY-906 | STM32 I2C1：PA15/SCL、PB7/SDA | 时序来自 CubeMX 工程 |
+| GY-906 | STM32 I2C1：PA15/SCL、PB7/SDA | 100 kHz，开漏，需确认外部上拉 |
 | 超声波 | PA4/TRIG、PA0/TIM2_CH1 ECHO | TIM2 输入捕获 |
 
-K230 到 STM32 的当前报文格式为 `ALERT,<type>,K230_01\r\n`，其中 `<type>` 为 `break`、`heat` 或 `wear`。当前链路是单向传输；K230 IO33/UART3_RXD 和 STM32 PC10/UART4_TX 不要求连接。两块板分别供电时不要互连 5 V 或 3.3 V，只连接信号线和公共地，并在上电前确认双方均为兼容的 3.3 V UART 电平。
+K230 告警格式为 `ALERT,<type>,K230_01\r\n`，其中 `<type>` 为 `break`、`heat` 或 `wear`。当前链路为单向通信，IO33/UART3_RXD 与 PC10/UART4_TX 可不连接。
 
-## 安全配置
+两块板分别供电时不要互连 5 V 或 3.3 V，只连接 UART 信号线和公共地；上电前确认双方均使用兼容的 3.3 V 逻辑电平。
 
-公开版本默认关闭 STM32 的 Wi-Fi/MQTT 自动连接，且不包含任何真实凭据。本地使用方法如下：
+## 快速开始
 
-1. 在 `Robot/PatrolRobot/Config/` 中把 `network_config.local.example.h` 和 `mqtt_secret.local.example.h` 分别复制为去掉 `.example` 的本地文件，再填入自己的 Wi-Fi、主题和巴法云私钥。
-2. 在 `SD/mp_deployment_source/` 中把 `k230_cloud_secret_local.example.py` 复制为 `k230_cloud_secret_local.py`，再填写 K230 使用的 Wi-Fi、云 UID 和图片主题。
-3. 这三个 `*.local.*` 文件已写入根目录 `.gitignore`。不要把真实配置粘贴到 README、日志、截图或公开问题单。
+### 1. 准备本地配置
 
-本地工作副本已保留原有配置到上述本地文件。若这些凭据曾通过其他目录、压缩包或既有仓库公开，应立即在对应平台轮换；本目录当前不是 Git 仓库，无法检查历史泄露。
+公开仓库不包含真实凭据，并默认关闭 STM32 的 Wi-Fi/MQTT 自动连接。
 
-## 构建与部署
+- 将 `Robot/PatrolRobot/Config/network_config.local.example.h` 复制为 `network_config.local.h`，填写本地 Wi-Fi、服务器和主题配置。
+- 将 `Robot/PatrolRobot/Config/mqtt_secret.local.example.h` 复制为 `mqtt_secret.local.h`，填写 MQTT 凭据。
+- 如需 K230 图片上传，将 `SD/mp_deployment_source/k230_cloud_secret_local.example.py` 复制为 `k230_cloud_secret_local.py`，填写本地云配置。
 
-### STM32
+这些本地文件已由 `.gitignore` 排除。不要把其中的值复制到源码、文档、截图、日志、Issue 或 Pull Request。
+
+### 2. 构建 STM32 固件
 
 1. 用 Keil 打开 `Robot/PatrolRobot/MDK-ARM/PatrolRobot.uvprojx`。
-2. 按“安全配置”准备本地头文件。
-3. 选择 `PatrolRobot` 目标并构建。工程配置会生成 HEX；默认输出目录为 `Robot/PatrolRobot/MDK-ARM/PatrolRobot/`。
-4. 烧录器、下载算法和目标板连接方法依赖本机 Keil 配置，公开文件无法完整确认，烧录前请在 Keil 中核对，当前步骤标记为待确认。
+2. 选择 `PatrolRobot` 目标并构建。
+3. 使用与目标板匹配的调试器和 Flash 算法进行下载；首次操作前请在 Keil 中核对目标器件和连接设置。
 
-### K230
+构建生成的 HEX、AXF、对象文件和日志保留在本地，不纳入 Git。公开配置默认值和本地配置均曾通过 Keil 构建，结果为 0 Error、0 Warning；该结果不代替烧录和硬件测试。
 
-1. 按 `SD/使用说明.md` 将所需内容放到 SD 卡根目录，确保设备路径为 `/sdcard/main.py`。
-2. 按“安全配置”创建本地云配置；不需要云上传时可以保持空值。
-3. 补充与目标固件匹配的 `SD/micropython` 和 KModel 文件。它们因体积、来源/授权和二进制内容无法在当前目录内充分审计，默认不纳入 Git；公开下载地址与再分发许可待确认。
-4. KModel 的期望文件名和类别顺序见 `SD/mp_deployment_source/deploy_config.json`。
-5. 上电时按住板载按键可跳过自动检测并进入 IDE 维护状态。
+### 3. 部署 K230
 
-## 大文件与仓库策略
+1. 按 [K230 使用说明](./SD/使用说明.md) 准备 SD 卡，确保设备路径为 `/sdcard/main.py`。
+2. 补充与目标板匹配的 CanMV 运行时和 KModel。二者默认不随源码仓库分发，原因与获取边界见 [外部部署资产](./ASSETS.md)。
+3. 核对 `SD/mp_deployment_source/deploy_config.json` 中的模型文件名、输入尺寸和类别顺序。
+4. 按本文接口表连接 K230、STM32 和公共地，再执行固定报文测试与三类样例测试。
 
-- `SD/micropython`（约 26.9 MiB）是 ELF 二进制运行时，来源、版本和再分发许可待确认，且二进制中存在证书/私钥格式测试标记；当前默认忽略，不建议直接公开。确认官方来源和许可后，优先提供官方校验下载说明，或再评估 Git LFS。
-- KModel（约 1.8 MiB）是运行必需的模型产物，但训练数据来源、模型许可和再分发权待确认；当前默认忽略。确认有权公开后，该体积可直接纳入 Git，模型版本较多时再使用 Git LFS。
-- Keil 输出、日志、运行时照片和个人 IDE 状态均由 `.gitignore` 排除，可在本地保留但不应上传。
+上电时按住 K230 板载按键会跳过自动检测并进入 IDE 维护状态。
 
-## 当前限制与验证边界
+## 文档
 
-- 现有文档记录了源码/协议检查和历史构建、烧录及样例联调结果；这些记录不等同于当前公开整理版本已经重新完成板上验收。
-- 三类样例链路已有历史记录，但完整数据集准确率、每类召回率、混淆矩阵和长期压力测试仍待完成。
-- 当前二进制重新烧录后的整机功能、MQTT 长时间稳定性、断网恢复和实际硬件电平需在目标设备上复验。
-- 模型、训练数据、K230 运行时以及项目自有源码的公开许可/第三方授权均待确认；STM32 HAL/CMSIS 自带许可文件位于 `Drivers/` 对应目录。
-- 仓库根目录尚未提供项目级 `LICENSE`。公开发布前应由权利人选择合适许可证；在此之前不要假定他人拥有复制、修改或分发项目自有内容的权限。
+- [部署与验收指南](./部署与验收指南.md)：面向首次部署者的完整操作和故障排查。
+- [STM32 项目架构](./Robot/项目架构说明.md)：模块职责、数据流、时序和维护约束。
+- [K230 使用说明](./SD/使用说明.md)：SD 卡结构、视觉脚本、串口测试和图片上传。
+- [历史开发与验证记录](./Robot/STM32开发与验证记录_2026-09-02.md)：保留特定日期的构建与板上验证证据。
+- [外部部署资产](./ASSETS.md)：未分发运行时和模型的原因、兼容性与获取建议。
+- [贡献指南](./CONTRIBUTING.md) 与 [安全说明](./SECURITY.md)。
 
-更详细的部署、故障排查和验收步骤见 [第三方使用说明书](./输电线路巡检机器人第三方使用说明书.md)、[STM32 项目架构说明](./Robot/项目架构说明.md)、[K230 使用说明](./SD/使用说明.md) 和 [外部部署资产说明](./ASSETS.md)。
+## 当前限制
+
+- 公开仓库不包含 K230 运行时和 KModel，克隆后不能直接完成视觉部署。
+- 模型训练数据来源、再分发授权、完整数据集准确率、每类召回率和混淆矩阵待确认。
+- 当前公开整理只修改文档，没有重新烧录；传感器、蓝牙、Wi-Fi、MQTT、K230 UART 和整机并行运行需要在目标硬件上复验。
+- MQTT 使用明文 TCP，不能视为适合不可信网络的安全控制通道。
+- MQTT 下行尚未定义执行器语义，收到消息不会直接控制机器人。
+- 超声波 ECHO 电平、GY-906 供电与 I²C 上拉、ESP-01S 启动脚状态需要按实际模块确认。
+
+## 贡献与安全
+
+提交修改前请阅读 [CONTRIBUTING.md](./CONTRIBUTING.md)。发现可能泄露凭据或影响设备安全的问题时，请不要在公开 Issue 中粘贴敏感信息，按照 [SECURITY.md](./SECURITY.md) 的方式报告。
+
+## 许可证
+
+项目中权属明确的自有代码和文档采用 [Apache License 2.0](./LICENSE)，版权声明为 `Copyright 2026 povohi-dotcom`。
+
+许可证范围不包括以下内容：
+
+- STM32 HAL、CMSIS 及其他第三方组件；它们继续遵循各自文件中保留的原始许可证和版权声明。
+- KModel、训练数据、本地 CanMV 运行时，以及其他未随仓库发布的外部资产；项目采用 Apache-2.0 不会自动授予这些资产的使用或再分发权。
+- 来源或权属尚未明确、且文件自身另有许可证或声明的内容。当前 `SD/ybUtils/YbKey.py` 和 `SD/ybUtils/YbRGB.py` 缺少可确认的来源与许可证记录，在完成来源核实前不将其声明为项目自有 Apache-2.0 代码。
+
+使用或再分发时，请同时检查相关目录中的第三方许可证文件以及 [ASSETS.md](./ASSETS.md) 所列边界。
