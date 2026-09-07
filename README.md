@@ -100,7 +100,7 @@ K230 告警格式为 `ALERT,<type>,K230_01\r\n`，其中 `<type>` 为 `break`、
 
 ## 许可证
 
-项目中权属明确的自有代码和文档采用 [Apache License 2.0](./LICENSE)，版权声明为 `Copyright 2026 povohi-dotcom`。
+项目中权属明确的自有代码和文档采用 [Apache License 2.0](./LICENSE)，版权声明为 `Copyright 2026 l0ng-dev`。
 
 许可证范围不包括以下内容：
 
